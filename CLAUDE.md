@@ -6,8 +6,9 @@ then escalate through the channels below.
 
 ## The team
 
-- **Bader** — manager: First Mate dispatcher (T1), orchestrator (T2), triage
-  (T3), night batch (T4), ops shell (T5). Escalations end at Bader.
+- **Bader** — manager, 3 seats: **First Mate / River** (autonomous triage,
+  dispatch + overnight build-to-queue — see "First Mate (River)" below),
+  **orchestrator** (planning + `/consensus`), **ops shell**. Escalations end at Bader.
 - **sjp** — teammate lane; currently holds the **demo owner** role
   (final call on demo freeze + submission). The role is reassignable — the
   role matters, not the name.
@@ -63,6 +64,19 @@ rubric and is required before submission.
   paste whole memory files into context.
 - Long session? Externalize findings to files and `/compact` at phase
   boundaries — stale context lies.
+
+## First Mate (River) — the manager's autonomous seat
+
+Bader's First Mate pane runs an autonomous loop (`/fm`, or `/loop 10m /fm`): it senses
+the board, triages, and — overnight — builds ready, in-scope, fully-specified issues to
+DRAFT PRs via `/consensus`, then queues any that come back green + bot-passed for a
+one-tap human merge (`/fm ack`). Fuzzy work becomes a scout report, not a build. It
+writes a morning digest to `data/context/handoffs/DIGEST.md`.
+
+River is **read-only over the repo**: it prepares, drafts, queues, and recommends, but
+NEVER merges, NEVER pushes main, NEVER applies `break-glass`, and NEVER decides a plan
+change or dispute (those get `needs-human`). That boundary is what makes it safe to leave
+running. Design adopted from `kunchenguid/firstmate`.
 
 ## Escalation ends at humans
 

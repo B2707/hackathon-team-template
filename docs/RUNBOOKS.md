@@ -16,8 +16,8 @@ Claude-heavy days land Wed–Fri (manager's weekly window resets Saturday).
 
 **Cut order when hours vanish** (rightmost dies first):
 review-bot → gotcha-bot promote flow → health strip → P0 tripwires ▮ CUT LINE ▮
-kanban/ticker → auto-unblock → /pitch wrapper → burn/demo tiles → night-batch
-launcher → scripted P1 fires → full instinct plumbing.
+kanban/ticker → auto-unblock → /pitch wrapper → burn/demo tiles → scripted P1
+fires → full instinct plumbing.
 
 ## Red main (rollback — rehearsed at D5)
 1. Announce in team channel: "main is red, reverting."
@@ -106,3 +106,21 @@ re-nag every pass while the condition persists — silence means fixed.
   `[DRILL]` prefix) and verifies that run is green. Binary checkpoint: #ops
   shows exactly 3 `[DRILL][P0]` lines, #feed exactly 5 `[DRILL][P1]` lines.
   Anything else = wiring broken; fix before the D5 team drill.
+
+## First Mate / River loop (the manager's autonomous seat)
+
+`/fm` on the First Mate pane is the standing loop (run it continuously with
+`/loop 10m /fm`). Each tick: senses the board → triages candidates/proposals →
+ships ready, fully-specified issues to DRAFT PRs via `/consensus` (headless codex,
+isolated worktrees) → queues green + bot-passed drafts under `queued-merge` →
+overwrites `data/context/handoffs/DIGEST.md`. Read-only over the repo; never merges.
+
+- **Morning ack (the only path to main):** `/fm ack` lists `queued-merge` PRs; you
+  merge the ones you approve (`gh pr ready <n> && gh pr merge <n> --squash`) — the
+  bot gate still applies. River never runs this.
+- **Snapshot any time:** `/fm bearings` (read-only "where are we").
+- **Build budget:** `FM_BUILD_BUDGET` (default 2/tick); River builds 0 while the
+  `budget` tripwire is hot. Manager seat only (guarded by `TEAM_SEAT` / `FM_MANAGER`).
+- **If River misbehaves:** it cannot merge or push main by construction. To pause it,
+  stop the loop (Ctrl-C the `/loop`) or clear `queued-merge` labels. Draft PRs it left
+  are harmless — review or close them like any draft.
