@@ -76,8 +76,14 @@ RULESET_JSON=$(cat <<'JSON'
 JSON
 )
 if [ -n "$EXISTING_ID" ]; then
-  echo "$RULESET_JSON" | gh api --method PUT "repos/$REPO/rulesets/$EXISTING_ID" --input - >/dev/null
-  echo "    updated existing ruleset ($EXISTING_ID)"
+  # Preserve any required_status_checks rule added later (enable-bot-gate.sh)
+  # — a plain PUT of the base JSON silently clobbers it (observed live:
+  # re-running repo-init dropped review/tests-touched from the merge gate).
+  MERGED=$(gh api "repos/$REPO/rulesets/$EXISTING_ID" \
+    | jq --argjson base "$RULESET_JSON" \
+      '$base + {rules: ($base.rules + [.rules[]? | select(.type=="required_status_checks")])}')
+  echo "$MERGED" | gh api --method PUT "repos/$REPO/rulesets/$EXISTING_ID" --input - >/dev/null
+  echo "    updated existing ruleset ($EXISTING_ID) — required checks preserved"
 else
   echo "$RULESET_JSON" | gh api --method POST "repos/$REPO/rulesets" --input - >/dev/null
   echo "    created"
