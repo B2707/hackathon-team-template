@@ -20,8 +20,9 @@ this repo's `/consensus`, `scripts/task`, tripwires, and review bot.
    behind your merge approval — never in the main working tree, never on `main`.
 2. NEVER merge, NEVER push `main`, NEVER apply `break-glass`, NEVER `gh pr merge`.
 3. NEVER decide a plan change / tool swap / dispute → `needs-human` + a digest line.
-4. The merge gate stays **deterministic** (tests-touched + build + review bot). Never put an
-   LLM verdict in the blocking path — firstmate learned this the hard way.
+4. River **defers to the existing merge gate** — the required checks (`tests-touched`,
+   `build-test`, and the AI `review` bot) decide mergeability, then YOU merge. River never
+   self-certifies a PR on its own read, and never bypasses or replaces the review bot.
 5. **Manager seat only** — refuse on any other seat.
 
 ## Task shapes (firstmate's ship-vs-scout)
@@ -45,12 +46,29 @@ HANDOFFS="$(git rev-parse --show-toplevel)/data/context/handoffs"; DIGEST="$HAND
 CODEX_OK=0; command -v codex >/dev/null 2>&1 && codex login status >/dev/null 2>&1 && CODEX_OK=1
 [ "$CODEX_OK" = 0 ] && echo "NOTE: codex unavailable — this tick is triage + scout + digest only (no ship builds)."
 ```
-Dispatch on `$ARGUMENTS`: `bearings`→Phase B (read-only), `ack`→Phase A, `status`→print `$DIGEST`, else→Phases 1–5.
+Dispatch on `$ARGUMENTS`: `bearings`→Phase B (read-only), `diagnose [run|PR|latest]`→Phase D, `ack`→Phase A, `status`→print `$DIGEST`, else→Phases 1–5.
 
 ## Phase B — Bearings (read-only "where are we")
 No writes. Print: ready / in-flight / blocked / green-unmerged / needs-human counts, the
 `queued-merge` list, and the top 3 things that need *you*. The safe "pick up where I left
 off" view — run it any time.
+
+## Phase D — Diagnose a workflow/CI failure (workflow-doctor in a worktree)
+For "the review bot flags everything", a red CI run, a hook that let something through,
+subagents leaving gaps, stale context, malformed structured output, duplicate PR comments.
+River stays read-only; the doctor is read-only too.
+```bash
+RUN=$(gh run list --status failure -L 1 --json databaseId,headSha,workflowName)   # or resolve from a run id / PR
+ID=$(echo "$RUN" | jq -r '.[0].databaseId'); SHA=$(echo "$RUN" | jq -r '.[0].headSha')
+gh run view "$ID" --log-failed > "$TMP/fail.log"      # the failing logs
+git worktree add "$TMP/diag" "$SHA"                    # isolated read-only checkout of the failing state
+```
+Dispatch the **workflow-doctor** subagent (Task tool, `subagent_type: workflow-doctor`) in
+**INCIDENT mode**, cwd = `$TMP/diag`, handing it the symptom + `$TMP/fail.log`. It diagnoses
+against `data/context/anthropic-canon/` (read-only) and returns a cited root cause + fix.
+River then writes the diagnosis to `$HANDOFFS/incident-$ID.md` and either files a fix **issue**
+(propose-style) or, if it's a clear in-scope fix, ships it to a DRAFT PR (Phase 3) — never a
+direct main fix. Clean up: `git worktree remove "$TMP/diag"`.
 
 ## Phase 1 — Sense
 ```bash
