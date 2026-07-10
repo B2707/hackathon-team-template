@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Flip the review bot + CI to REQUIRED status checks on the protect-main
 # ruleset. Run ONLY after the hello-world verify PR shows green runs for
-# "review", "tests-touched", and "build-test" — a required check that never
-# reports blocks every merge (see docs/RUNBOOKS.md "Bring the review bot online").
+# "review", "tests-touched", "build-test", and "hooks-test" — a required check
+# that never reports blocks every merge (see docs/RUNBOOKS.md "Bring the review bot online").
 #
 # Usage: scripts/enable-bot-gate.sh <owner/repo>
 set -euo pipefail
@@ -28,4 +28,4 @@ gh api "repos/$REPO/rulesets/$ruleset_id" | jq '{
 }' | gh api -X PUT "repos/$REPO/rulesets/$ruleset_id" --input - >/dev/null
 
 echo "OK: 'review' + 'tests-touched' + 'build-test' + 'hooks-test' are now required to merge into main on $REPO"
-echo "Verify: a fresh PR must show both checks before the merge button goes green."
+echo "Verify: a fresh PR must show all four checks before the merge button goes green."

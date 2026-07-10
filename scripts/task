@@ -84,14 +84,15 @@ cmd_start() {
       fi
     done
   fi
+  # Takeover check BEFORE creating anything (bot WARN: warning after
+  # `git worktree add` fires post-collision — the duplicate already exists)
+  if git ls-remote --heads origin "task/$n-*" 2>/dev/null | grep -q .; then
+    warn "existing task/$n-* branch on origin — takeover instead of restart: git fetch origin && git worktree add $WT_DIR/issue-$n <that-branch> (Ctrl-C now to do that; continuing creates a parallel branch)"
+  fi
   local br="task/$n-$SEAT" wt="$WT_DIR/issue-$n"
   [ -d "$wt" ] && { say "worktree already exists: $wt"; exit 1; }
   git worktree add -q "$wt" -b "$br" origin/main
   gh issue edit "$n" --add-assignee "@me" >/dev/null 2>&1 || warn "could not self-assign issue #$n"
-  # Takeover context: a teammate may have pushed a branch before going down
-  if git ls-remote --heads origin "task/$n-*" 2>/dev/null | grep -q .; then
-    warn "existing task/$n-* branch on origin — takeover instead of restart: git fetch origin && git worktree add $WT_DIR/issue-$n <that-branch>"
-  fi
   say ""
   say "== TASK BRIEF (issue #$n — with comments: dead ends + takeover notes live here) =="
   gh issue view "$n" --comments || true
