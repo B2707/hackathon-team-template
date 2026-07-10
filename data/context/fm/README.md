@@ -9,8 +9,9 @@ a double-build — `fm-build`'s branch-collision check).
 | File | Tracked? | What it is |
 |---|---|---|
 | `README.md` | ✅ committed | this doc |
-| `state.json` | ✖ gitignored | `{schema, window, buildsThisWindow, tick, builtIssues[]}` — build window + idempotency cache (`scripts/fm-state.sh`) |
-| `PAUSE` | ✖ gitignored | kill-switch: if present, River holds **all** builds (triage/scout/digest continue) |
+| `state.json` | ✖ gitignored | `{schema:2, window, buildsThisWindow, mergesThisWindow, tick, builtIssues[], mergedPRs[], rebaseAttempts{}}` — window counters + idempotency cache; **`mergedPRs` is append-only across windows (the audit trail)**; corrupt file = mutations fail closed, `rm` it to reset (`scripts/fm-state.sh`) |
+| `PAUSE` | ✖ gitignored | kill-switch: if present, River holds **all builds AND merges** (triage/scout/digest continue) |
+| `.lock/`, `merge.lock/` | ✖ gitignored | mkdir mutexes (state writes / the merge train); stale ones self-clear (5 min / 30 min) |
 
 - **Night build cap:** `FM_NIGHT_BUILD_CAP` (default 8) per UTC-day window; the
   window auto-resets on a new day.

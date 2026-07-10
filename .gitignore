@@ -9,5 +9,7 @@ dist/
 .stack-stamp-probe.*
 # First Mate / River runtime state (data/context/fm/README.md is committed; these are per-machine)
 data/context/fm/state.json
-data/context/fm/state.json.tmp
+data/context/fm/.state.*
 data/context/fm/PAUSE
+data/context/fm/.lock/
+data/context/fm/merge.lock/

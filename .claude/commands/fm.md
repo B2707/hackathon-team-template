@@ -1,5 +1,5 @@
 ---
-description: First Mate / River — the manager's autonomous liaison loop: triage the board, build ready work to open PRs, queue green ones for your one-tap merge. Manager seat only.
+description: First Mate / River — the manager's autonomous liaison loop: triage the board, build ready work to open PRs, auto-merge policy-eligible green ones in dependency-priority order (machinery stays human-merged). Manager seat only.
 argument-hint: "[tick | bearings | ack | status]  (default tick; loop it with /loop 10m /fm)"
 allowed-tools: Bash, Read, Write
 ---
@@ -11,14 +11,19 @@ crew and hands you finished work. One tick = **sense** the board → **triage** 
 ready work to open PRs (headless codex) → **queue** the green ones for your ack → **digest**.
 Run continuously on the First Mate pane with `/loop 10m /fm`, or once with `/fm`.
 
-Autonomy: **build-and-queue-green.** River prepares, drafts, and queues; **a human always
-merges.** Design adopted from `kunchenguid/firstmate` + ECC `continuous-agent-loop`, reusing
-this repo's `/consensus`, `scripts/task`, tripwires, and review bot.
+Autonomy: **merge-with-rules.** River prepares, queues, and **auto-merges policy-eligible
+green PRs in dependency-priority order** via `scripts/fm-merge.sh` — but **machinery changes
+(.github/ .claude/ scripts/ .env) are always human-merged**, and every merge still passes the
+server-side gate. Design adopted from `kunchenguid/firstmate` + ECC `continuous-agent-loop`,
+reusing this repo's `/consensus`, `scripts/task`, tripwires, and review bot.
 
 ## Boundaries — why you can leave it running (structural, not vibes)
 1. **River is read-only over the repo.** All code changes happen in **crewmate worktrees**
    behind your merge approval — never in the main working tree, never on `main`.
-2. NEVER merge, NEVER push `main`, NEVER apply `break-glass`, NEVER `gh pr merge`.
+2. Merges happen ONLY through `bash scripts/fm-merge.sh` — the rule-gated engine (machinery
+   paths human-only · freeze · caps · freshness · dependency-priority order). NEVER call
+   `gh pr merge` directly, NEVER push `main`, NEVER apply `break-glass`, NEVER auto-merge a
+   PR that touches `.github/`, `.claude/`, `scripts/`, or `.env*` — those wait for you.
 3. NEVER decide a plan change / tool swap / dispute → `needs-human` + a digest line.
 4. River **defers to the existing merge gate** — the required checks (`tests-touched`,
    `build-test`, and the AI `review` bot) decide mergeability, then YOU merge. River never
@@ -113,10 +118,17 @@ build each. River never merges — **branch protection** (P0) holds every PR unt
 
 Underspecified after a look → convert to **scout**, don't force a build.
 
-## Phase 4 — Queue green PRs for your ack (no merge)
+## Phase 4 — Queue green PRs, then rule-gated merge
 For each `fm-built` PR now mergeable with CI + the `review` bot check GREEN → `gh pr edit <n>
---add-label queued-merge` and add a one-line risk-tagged digest entry. Branch protection keeps
-it unmerged until you act. **Do not merge.**
+--add-label queued-merge` and add a one-line risk-tagged digest entry. Then run the merge engine
+— it assesses the queue (dependencies → priority → age), merges eligible CLEAN PRs serially
+(SHA-pinned, labels re-verified at merge time), and updates-from-main-then-defers anything
+validated against stale main (never batch-merges on stale checks):
+```bash
+bash scripts/fm-merge.sh          # or `assess` first for the read-only plan
+```
+Put every FM-MERGE line in the digest. PRs it classifies HUMAN (machinery paths, needs-human,
+PLAN:, break-glass) stay queued for your `/fm ack`. Never bypass the engine.
 
 ## Phase 5 — Digest (one line per item, risk-tagged — firstmate style)
 Overwrite `$DIGEST` (restart-proof: all state on disk). One line per item:
@@ -127,15 +139,18 @@ Overwrite `$DIGEST` (restart-proof: all state on disk). One line per item:
 ```
 Print the QUEUED and NEEDS-YOUR-CALL sections to the pane so you catch them at a glance.
 
-## Phase A — /fm ack  (the ONLY path to main — you, not River)
+## Phase A — /fm ack  (audit River's merges + clear the human-only tier)
 ```bash
+bash scripts/fm-state.sh get '.mergedPRs'                       # what River merged this window (audit)
+bash scripts/fm-merge.sh assess                                 # what's still queued + why it's waiting
 gh pr list --label queued-merge --json number,title,url -q '.[] | "\(.number)  \(.title)  \(.url)"'
-# for each you approve:  gh pr ready <n> && gh pr merge <n> --squash   (bot gate still applies)
+# HUMAN-tier PRs (machinery / needs-human / PLAN:) are yours:  gh pr merge <n> --squash
 ```
 
 ## Caps (hard)
 Build budget ${FM_BUILD_BUDGET:-2}/tick · night cap ${FM_NIGHT_BUILD_CAP:-8}/window · consensus ≤5
-rounds · ≤1 fix pass. Never exceed; never merge; never push main; never break-glass. `rm -rf "$TMP"` at tick end.
+rounds · ≤1 fix pass · merge caps ${FM_MERGE_TICK_CAP:-2}/tick + ${FM_MERGE_CAP:-8}/window. Never
+exceed; merge ONLY via `fm-merge.sh`; never push main; never break-glass. `rm -rf "$TMP"` at tick end.
 
 **Restart-proof (P2).** All loop state is on disk — `data/context/fm/state.json` (build window +
 built issues; the live repo is the source of truth, this is a cache) plus the DIGEST. A `/loop`

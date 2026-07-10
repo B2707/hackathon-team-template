@@ -115,9 +115,21 @@ ships ready, fully-specified issues to DRAFT PRs via `/consensus` (headless code
 isolated worktrees) → queues green + bot-passed drafts under `queued-merge` →
 overwrites `data/context/handoffs/DIGEST.md`. Read-only over the repo; never merges.
 
-- **Morning ack (the only path to main):** `/fm ack` lists `queued-merge` PRs; you
-  merge the ones you approve (`gh pr ready <n> && gh pr merge <n> --squash`) — the
-  bot gate still applies. River never runs this.
+- **Rule-gated auto-merge (`scripts/fm-merge.sh`):** River merges `queued-merge` PRs
+  itself — in dependency-priority order (Depends-on edges → demo-path > fix > feat >
+  docs → oldest first), serially, only `mergeStateStatus=CLEAN` (a green-but-BEHIND PR
+  is updated from main and re-validated next tick — the ruleset's strict mode is off, so
+  this is what prevents two green PRs from breaking each other). Merges are SHA-pinned
+  to the assessed head and labels re-verified at merge time (the panic button always
+  wins); ≤3 update-branch attempts per PR per window, then `needs-human`. **Machinery PRs never
+  auto-merge:** anything touching `.github/`, `.claude/`, `scripts/`, `.env*` waits for
+  you, as do `needs-human` / `break-glass` / `PLAN:` items and everything during demo
+  freeze. Caps: `FM_MERGE_TICK_CAP` (2/tick), `FM_MERGE_CAP` (8/UTC-day).
+- **Morning ack (audit + human tier):** `/fm ack` shows what River merged
+  (`fm-state get '.mergedPRs'`), the current merge plan (`fm-merge assess`), and the
+  HUMAN-tier queue — those you merge yourself (`gh pr merge <n> --squash`).
+- **Merge kill-switch:** `FM_AUTOMERGE=off` (queue-only, no merges) or
+  `touch data/context/fm/PAUSE` (halts builds AND merges).
 - **Snapshot any time:** `/fm bearings` (read-only "where are we").
 - **Build budget:** `FM_BUILD_BUDGET` (default 2/tick); River builds 0 while the
   `budget` tripwire is hot. Manager seat only (guarded by `TEAM_SEAT` / `FM_MANAGER`).
