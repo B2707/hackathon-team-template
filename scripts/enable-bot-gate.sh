@@ -22,10 +22,10 @@ gh api "repos/$REPO/rulesets/$ruleset_id" | jq '{
         type: "required_status_checks",
         parameters: {
           strict_required_status_checks_policy: false,
-          required_status_checks: [{context: "review"}, {context: "tests-touched"}, {context: "build-test"}]
+          required_status_checks: [{context: "review"}, {context: "tests-touched"}, {context: "build-test"}, {context: "hooks-test"}]
         }
       }])
 }' | gh api -X PUT "repos/$REPO/rulesets/$ruleset_id" --input - >/dev/null
 
-echo "OK: 'review' + 'tests-touched' + 'build-test' are now required to merge into main on $REPO"
+echo "OK: 'review' + 'tests-touched' + 'build-test' + 'hooks-test' are now required to merge into main on $REPO"
 echo "Verify: a fresh PR must show both checks before the merge button goes green."
