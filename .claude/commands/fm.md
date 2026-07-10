@@ -1,5 +1,5 @@
 ---
-description: First Mate / River — the manager's autonomous liaison loop: triage the board, build ready work to DRAFT PRs, queue green ones for your one-tap merge. Manager seat only.
+description: First Mate / River — the manager's autonomous liaison loop: triage the board, build ready work to open PRs, queue green ones for your one-tap merge. Manager seat only.
 argument-hint: "[tick | bearings | ack | status]  (default tick; loop it with /loop 10m /fm)"
 allowed-tools: Bash, Read, Write
 ---
@@ -8,7 +8,7 @@ allowed-tools: Bash, Read, Write
 
 You are the **captain**; `/fm` is your **first mate**. You talk to one agent; it runs the
 crew and hands you finished work. One tick = **sense** the board → **triage** → **build**
-ready work to DRAFT PRs (headless codex) → **queue** the green ones for your ack → **digest**.
+ready work to open PRs (headless codex) → **queue** the green ones for your ack → **digest**.
 Run continuously on the First Mate pane with `/loop 10m /fm`, or once with `/fm`.
 
 Autonomy: **build-and-queue-green.** River prepares, drafts, and queues; **a human always
@@ -27,7 +27,7 @@ this repo's `/consensus`, `scripts/task`, tripwires, and review bot.
 
 ## Task shapes (firstmate's ship-vs-scout)
 - **ship** — issue is unclaimed, `ready`, in-scope, fully specified (brief has file scope +
-  acceptance criteria) → build to a DRAFT PR.
+  acceptance criteria) → build to an open PR.
 - **scout** — issue is fuzzy, a question, or out-of-scope → DON'T build. Write a short
   investigation report to `data/context/handoffs/<n>.md` + a digest line. River never
   builds underspecified work.
@@ -67,7 +67,7 @@ Dispatch the **workflow-doctor** subagent (Task tool, `subagent_type: workflow-d
 **INCIDENT mode**, cwd = `$TMP/diag`, handing it the symptom + `$TMP/fail.log`. It diagnoses
 against `data/context/anthropic-canon/` (read-only) and returns a cited root cause + fix.
 River then writes the diagnosis to `$HANDOFFS/incident-$ID.md` and either files a fix **issue**
-(propose-style) or, if it's a clear in-scope fix, ships it to a DRAFT PR (Phase 3) — never a
+(propose-style) or, if it's a clear in-scope fix, ships it to an open PR (Phase 3) — never a
 direct main fix. Clean up: `git worktree remove "$TMP/diag"`.
 
 ## Phase 1 — Sense
@@ -88,28 +88,31 @@ Summarize the board in ≤5 lines.
   next-up brief into `$HANDOFFS/`, digest line. Real red-main it can't SAFELY revert →
   `needs-human` + loud line. Never auto-revert main.
 
-## Phase 3 — Ship ready work to DRAFT PRs  [Execute · codex · budget-capped]
+## Phase 3 — Ship ready work to OPEN PRs  [Execute · codex · budget-capped]
 Pick ≤ **${FM_BUILD_BUDGET:-2}** `ship`-shaped issues (`demo-path` first). Skip entirely if the
 `budget` tripwire is hot (>10 review-bot runs this hour → build 0). For each, run the
-**/consensus** engine (plan → codex consensus ≤5 → codex exec on a fresh `codex/<slug>`
-worktree branch → cross-model review), then leave a **draft** PR — never ready, never merged:
+**/consensus** engine (plan → codex consensus ≤5 → codex exec on a fresh worktree branch →
+cross-model review), then **push** and open a **non-draft** PR so CI + the review bot actually
+run. River never merges — **branch protection** (P0) is what holds the PR until your `/fm ack`:
 ```bash
+SLUG="<n>-<kebab-slug>"                                          # issue number → unique branch, no collisions
 git worktree add "$TMP/wt-$SLUG" -b "codex/$SLUG" origin/main    # isolated crewmate home
 # run the /consensus procedure with cwd = "$TMP/wt-$SLUG"
-gh pr create --draft --fill --head "codex/$SLUG" --label fm-built
+git -C "$TMP/wt-$SLUG" push -u origin "codex/$SLUG"             # /consensus won't push — River must
+gh pr create --fill --head "codex/$SLUG" --label fm-built       # NON-draft: drafts are skipped by CI + review bot
 ```
 Underspecified after a look → convert to **scout**, don't force a build. Clean up the worktree
 (`git worktree remove`) once the branch is pushed.
 
-## Phase 4 — Queue green drafts for your ack (no merge)
-For each `fm-built` PR now not-draft-blocked, mergeable, review check GREEN, and bot `review`
-passed → `gh pr edit <n> --add-label queued-merge` and add a one-line risk-tagged digest entry.
-**Do not merge.**
+## Phase 4 — Queue green PRs for your ack (no merge)
+For each `fm-built` PR now mergeable with CI + the `review` bot check GREEN → `gh pr edit <n>
+--add-label queued-merge` and add a one-line risk-tagged digest entry. Branch protection keeps
+it unmerged until you act. **Do not merge.**
 
 ## Phase 5 — Digest (one line per item, risk-tagged — firstmate style)
 Overwrite `$DIGEST` (restart-proof: all state on disk). One line per item:
 ```
-#42 rate-limiter    — DRAFT #88 · risk: low  · CI green  · QUEUED for /fm ack
+#42 rate-limiter    — PR #88 · risk: low  · CI green  · QUEUED for /fm ack
 #43 oauth refactor  — SCOUT handoffs/43.md · risk: high · NEEDS YOUR CALL
 #51 PLAN: swap Redis→SQLite — needs-human · your decision
 ```
