@@ -111,9 +111,11 @@ re-nag every pass while the condition persists — silence means fixed.
 
 `/fm` on the First Mate pane is the standing loop (run it continuously with
 `/loop 10m /fm`). Each tick: senses the board → triages candidates/proposals →
-ships ready, fully-specified issues to DRAFT PRs via `/consensus` (headless codex,
-isolated worktrees) → queues green + bot-passed drafts under `queued-merge` →
-overwrites `data/context/handoffs/DIGEST.md`. Read-only over the repo; never merges.
+ships ready, fully-specified issues to **non-draft** PRs (`scripts/fm-build.sh`,
+headless codex, isolated worktrees) → labels green + bot-passed ones `queued-merge`
+→ **auto-merges the policy-eligible ones** (`scripts/fm-merge.sh`, rules below) →
+overwrites `data/context/handoffs/DIGEST.md`. Code changes happen only in crewmate
+worktrees; machinery merges stay human-only.
 
 - **Rule-gated auto-merge (`scripts/fm-merge.sh`):** River merges `queued-merge` PRs
   itself — in dependency-priority order (Depends-on edges → demo-path > fix > feat >

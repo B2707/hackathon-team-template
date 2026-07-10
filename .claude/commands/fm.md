@@ -103,7 +103,8 @@ if PC="$(bash scripts/fm-precheck.sh)"; then BUILD=1; else BUILD=0; fi; echo "$P
 ```
 If `BUILD=0`, **skip building** this tick (triage + scout + digest only) and put `$PC` in the
 digest. Otherwise pick ≤ **${FM_BUILD_BUDGET:-2}** `ship`-shaped issues (`demo-path` first) and
-build each. River never merges — **branch protection** (P0) holds every PR until your `/fm ack`.
+build each. **Branch protection** (P0) gates every PR; the merge engine (Phase 4) auto-merges
+the policy-eligible green ones — machinery PRs wait for your `/fm ack`.
 
 - **Unattended (the loop's default)** — one deterministic headless command per issue. It builds
   in an isolated worktree, pushes, opens a **non-draft** `fm-built` PR, and records the build in

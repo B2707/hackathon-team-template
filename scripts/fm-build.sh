@@ -81,6 +81,8 @@ $(cat "$TMP/summary.txt")"
 git -C "$wt" push -q -u origin "$BR" || { cleanup_wt; die "push failed" failed 1; }
 REPO_NWO="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
 gh label create fm-built --repo "$REPO_NWO" --color BFD4F2 --description "Built headlessly by /fm (River)" 2>/dev/null || true
+# stderr captured separately: gh writes progress there even on success, which would
+# corrupt the FM-BUILD-RESULT JSON's pr field if merged into the captured URL
 pr_url="$(gh pr create --repo "$REPO_NWO" --base main --head "$BR" \
   --title "[fm] #$ISSUE $title" \
   --body "Built headlessly by \`/fm\` (River) from issue #$ISSUE via \`codex exec\`.
@@ -88,8 +90,8 @@ pr_url="$(gh pr create --repo "$REPO_NWO" --base main --head "$BR" \
 $(cat "$TMP/summary.txt")
 
 ---
-River does not merge. CI + the \`review\` bot gate this PR; branch protection holds it for your \`/fm ack\`. Closes #$ISSUE." \
-  --label fm-built 2>&1)" || { cleanup_wt; die "gh pr create failed: $pr_url" failed 1; }
+CI + the \`review\` bot gate this PR; the fm-merge engine (or your \`/fm ack\`) merges it. Closes #$ISSUE." \
+  --label fm-built 2>"$TMP/pr-err.txt")" || { cleanup_wt; die "gh pr create failed: $(cat "$TMP/pr-err.txt")" failed 1; }
 
 bash "$STATE_SH" mark-built "$ISSUE" >/dev/null 2>&1 || true
 cleanup_wt
