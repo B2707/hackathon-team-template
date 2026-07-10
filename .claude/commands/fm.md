@@ -45,6 +45,8 @@ REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
 HANDOFFS="$(git rev-parse --show-toplevel)/data/context/handoffs"; DIGEST="$HANDOFFS/DIGEST.md"
 CODEX_OK=0; command -v codex >/dev/null 2>&1 && codex login status >/dev/null 2>&1 && CODEX_OK=1
 [ "$CODEX_OK" = 0 ] && echo "NOTE: codex unavailable — this tick is triage + scout + digest only (no ship builds)."
+bash scripts/fm-state.sh init >/dev/null 2>&1 || true   # P2: durable loop state (resets the build window on a new day)
+bash scripts/fm-state.sh 'paused?' 2>/dev/null && echo "NOTE: PAUSE kill-switch set — builds held this tick; triage + scout + digest only."
 ```
 Dispatch on `$ARGUMENTS`: `bearings`→Phase B (read-only), `diagnose [run|PR|latest]`→Phase D, `ack`→Phase A, `status`→print `$DIGEST`, else→Phases 1–5.
 
@@ -88,21 +90,28 @@ Summarize the board in ≤5 lines.
   next-up brief into `$HANDOFFS/`, digest line. Real red-main it can't SAFELY revert →
   `needs-human` + loud line. Never auto-revert main.
 
-## Phase 3 — Ship ready work to OPEN PRs  [Execute · codex · budget-capped]
-Pick ≤ **${FM_BUILD_BUDGET:-2}** `ship`-shaped issues (`demo-path` first). Skip entirely if the
-`budget` tripwire is hot (>10 review-bot runs this hour → build 0). For each, run the
-**/consensus** engine (plan → codex consensus ≤5 → codex exec on a fresh worktree branch →
-cross-model review), then **push** and open a **non-draft** PR so CI + the review bot actually
-run. River never merges — **branch protection** (P0) is what holds the PR until your `/fm ack`:
+## Phase 3 — Ship ready work to OPEN PRs  [Execute · codex · gated]
+**Gate first (P2).** Run the per-tick precheck — it degrades to triage-only when codex is down,
+the night cap is hit, the `budget` wire is hot, or the PAUSE kill-switch is set:
 ```bash
-SLUG="<n>-<kebab-slug>"                                          # issue number → unique branch, no collisions
-git worktree add "$TMP/wt-$SLUG" -b "codex/$SLUG" origin/main    # isolated crewmate home
-# run the /consensus procedure with cwd = "$TMP/wt-$SLUG"
-git -C "$TMP/wt-$SLUG" push -u origin "codex/$SLUG"             # /consensus won't push — River must
-gh pr create --fill --head "codex/$SLUG" --label fm-built       # NON-draft: drafts are skipped by CI + review bot
+if PC="$(bash scripts/fm-precheck.sh)"; then BUILD=1; else BUILD=0; fi; echo "$PC"
 ```
-Underspecified after a look → convert to **scout**, don't force a build. Clean up the worktree
-(`git worktree remove`) once the branch is pushed.
+If `BUILD=0`, **skip building** this tick (triage + scout + digest only) and put `$PC` in the
+digest. Otherwise pick ≤ **${FM_BUILD_BUDGET:-2}** `ship`-shaped issues (`demo-path` first) and
+build each. River never merges — **branch protection** (P0) holds every PR until your `/fm ack`.
+
+- **Unattended (the loop's default)** — one deterministic headless command per issue. It builds
+  in an isolated worktree, pushes, opens a **non-draft** `fm-built` PR, and records the build in
+  durable state. Idempotent: a re-run for an already-built issue (or one with an open
+  `codex/<n>-*` branch) is a no-op — so a `/loop` context reset never double-builds:
+  ```bash
+  bash scripts/fm-build.sh <n>        # → final line: FM-BUILD-RESULT {"issue":n,"status":...,"pr":...}
+  ```
+- **Attended (you're at the seat)** — drive the richer **/consensus** engine instead (plan →
+  codex consensus ≤5 → codex exec → cross-model review) on a `codex/<n>-slug` worktree, then push
+  + non-draft PR by hand. Higher touch, same gate holds it for ack.
+
+Underspecified after a look → convert to **scout**, don't force a build.
 
 ## Phase 4 — Queue green PRs for your ack (no merge)
 For each `fm-built` PR now mergeable with CI + the `review` bot check GREEN → `gh pr edit <n>
@@ -125,5 +134,11 @@ gh pr list --label queued-merge --json number,title,url -q '.[] | "\(.number)  \
 ```
 
 ## Caps (hard)
-Build budget ${FM_BUILD_BUDGET:-2}/tick · consensus ≤5 rounds · ≤1 fix pass (from /consensus).
-Never exceed; never merge; never push main; never break-glass. `rm -rf "$TMP"` at the end of the tick.
+Build budget ${FM_BUILD_BUDGET:-2}/tick · night cap ${FM_NIGHT_BUILD_CAP:-8}/window · consensus ≤5
+rounds · ≤1 fix pass. Never exceed; never merge; never push main; never break-glass. `rm -rf "$TMP"` at tick end.
+
+**Restart-proof (P2).** All loop state is on disk — `data/context/fm/state.json` (build window +
+built issues; the live repo is the source of truth, this is a cache) plus the DIGEST. A `/loop`
+context reset resumes cleanly: idempotent `fm-build.sh` skips any issue with an open `codex/<n>-*`
+branch or `fm-built` PR. **Kill-switch:** `touch data/context/fm/PAUSE` halts all builds (triage
+continues); delete it to resume.

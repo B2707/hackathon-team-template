@@ -122,5 +122,19 @@ overwrites `data/context/handoffs/DIGEST.md`. Read-only over the repo; never mer
 - **Build budget:** `FM_BUILD_BUDGET` (default 2/tick); River builds 0 while the
   `budget` tripwire is hot. Manager seat only (guarded by `TEAM_SEAT` / `FM_MANAGER`).
 - **If River misbehaves:** it cannot merge or push main by construction. To pause it,
-  stop the loop (Ctrl-C the `/loop`) or clear `queued-merge` labels. Draft PRs it left
-  are harmless — review or close them like any draft.
+  `touch data/context/fm/PAUSE` (halts builds; triage continues), stop the loop (Ctrl-C
+  the `/loop`), or clear `queued-merge` labels. PRs it left are harmless — review or close.
+
+### Unattended-River hardening (P2 — bonus, never a dependency)
+
+River is safe to leave running overnight; if codex or the loop is flaky it just stops
+building and keeps triaging — the manager can always dispatch by hand instead.
+
+- **Per-tick gate** (`scripts/fm-precheck.sh`): builds only when codex is authed, the night
+  cap isn't hit, the `budget` wire is cool, and no PAUSE file — else the tick is triage-only.
+- **Headless builds** (`scripts/fm-build.sh <n>`): deterministic issue→non-draft-PR via
+  `codex exec` in an isolated worktree; the loop uses this instead of interactive `/consensus`.
+- **Night cap:** `FM_NIGHT_BUILD_CAP` (default 8) builds per UTC-day window (auto-resets daily).
+- **Kill-switch:** `touch data/context/fm/PAUSE` pauses all builds; `rm` it to resume.
+- **Restart-proof:** state lives in `data/context/fm/state.json` (a cache — the live repo is the
+  source of truth) so a `/loop` context reset never double-builds an issue.
